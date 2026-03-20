@@ -4,14 +4,15 @@
 #
 # This script handles the entire process from source code to production release:
 # 1. Validates environment and configuration
-# 2. Extracts version from Info.plist
-# 3. Bumps version/build numbers
+# 2. Determines next version from git history via git-cliff (feat->minor, fix->patch)
+# 3. Bumps version in Info.plist and project.pbxproj
 # 4. Builds and archives the Xcode project
 # 5. Exports the app bundle
 # 6. Notarizes and staples the app
 # 7. Creates a release DMG archive
-# 8. Generates the Sparkle appcast.xml
-# 9. Commits changes to git
+# 8. Generates HTML release notes via git-cliff
+# 9. Generates the Sparkle appcast.xml
+# 10. Commits version bump to app repo, commits release to web repo, tags app repo
 #
 # Usage:
 #   ./scripts/build-and-release.sh [options]
@@ -19,9 +20,8 @@
 # Options:
 #   --dry-run              Show what would be done without making changes
 #   --skip-git             Don't commit or push to git
-#   --release-notes FILE   Include release notes HTML/TXT file
-#   --version VERSION      Override version detection
-#   --bump TYPE            Version bump type: patch | minor | major (default: patch)
+#   --release-notes FILE   Override auto-generated release notes with a custom file
+#   --version VERSION      Override version determined by git-cliff
 #   --verbose              Enable verbose output
 #   --help                 Show this help message
 #
@@ -43,7 +43,6 @@ SKIP_GIT=false
 RELEASE_NOTES_FILE=""
 OVERRIDE_VERSION=""
 VERBOSE=false
-BUMP_TYPE="patch"
 BUILD_NUMBER="unknown"
 
 show_help() {
@@ -68,11 +67,6 @@ while [[ $# -gt 0 ]]; do
     --version)
       [ -z "${2:-}" ] && { log_error "--version requires a value"; exit 1; }
       OVERRIDE_VERSION="$2"
-      shift 2
-      ;;
-    --bump)
-      [ -z "${2:-}" ] && { log_error "--bump requires patch, minor, or major"; exit 1; }
-      BUMP_TYPE="$2"
       shift 2
       ;;
     --verbose)
@@ -121,7 +115,7 @@ log_success "Configuration validated"
 
 log_info "Checking required tools..."
 
-for tool in xcodebuild agvtool dmgbuild xcrun ditto; do
+for tool in xcodebuild dmgbuild xcrun ditto git-cliff; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     log_error "Required tool not found: $tool"
     exit 1
@@ -134,98 +128,71 @@ log_success "All required tools available"
 # VERSION DETECTION
 # ============================================================================
 
-log_info "Detecting version..."
+PLIST_PATH="$XCODE_PROJECT_PATH/$INFO_PLIST"
+PBXPROJ="$XCODE_PROJECT_PATH/$XCODE_SCHEME.xcodeproj/project.pbxproj"
+
+if ! file_exists "$PLIST_PATH"; then
+  log_error "Info.plist not found at: $PLIST_PATH"
+  exit 1
+fi
 
 if [ -n "$OVERRIDE_VERSION" ]; then
   VERSION="$OVERRIDE_VERSION"
-  log_info "Using override version: $VERSION"
+  CURRENT_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH" 2>/dev/null || echo "0")
+  BUILD_NUMBER="$CURRENT_BUILD"
+  log_info "Using override version: $VERSION (build $BUILD_NUMBER)"
 else
-  PLIST_PATH="$XCODE_PROJECT_PATH/$INFO_PLIST"
-  
-  if ! file_exists "$PLIST_PATH"; then
-    log_error "Info.plist not found at: $PLIST_PATH"
-    exit 1
+  log_info "Determining next version from git history..."
+
+  LAST_TAG=$(git -C "$XCODE_PROJECT_PATH" tag --sort=-version:refname 2>/dev/null | head -1)
+
+  if [ -z "$LAST_TAG" ]; then
+    # No tags yet — read current version from Info.plist and do an initial minor bump
+    CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" | tr -d '[:space:]')
+    IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "$CURRENT_VERSION"
+    VERSION="$V_MAJOR.$((V_MINOR + 1)).0"
+    log_info "No tags found — using $CURRENT_VERSION → $VERSION as first release"
+  else
+    VERSION=$(git-cliff \
+                --repository "$XCODE_PROJECT_PATH" \
+                --config "$SCRIPT_DIR/cliff.toml" \
+                --bumped-version 2>/dev/null | tr -d '[:space:]')
+    VERSION="${VERSION#v}"  # strip leading 'v' if present
+
+    if [ -z "$VERSION" ]; then
+      log_error "git-cliff could not determine next version. Ensure there are conventional commits since the last tag."
+      exit 1
+    fi
   fi
-  
-  VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" 2>/dev/null || \
-            /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH")
-  
-  if [ -z "$VERSION" ]; then
-    log_error "Could not extract version from Info.plist"
-    exit 1
+
+  CURRENT_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH" 2>/dev/null || echo "0")
+  if [[ "$CURRENT_BUILD" =~ ^[0-9]+$ ]]; then
+    BUILD_NUMBER=$((CURRENT_BUILD + 1))
+  else
+    BUILD_NUMBER="$CURRENT_BUILD"
   fi
 fi
 
-log_success "Version detected: $VERSION"
+log_success "Version: $VERSION (build $BUILD_NUMBER)"
 
 # ============================================================================
 # VERSION BUMP PHASE
 # ============================================================================
 
-log_info "Bumping version in Xcode build settings..."
+log_info "Writing version to app repo..."
 
-if ! $DRY_RUN && [ -z "$OVERRIDE_VERSION" ]; then
-  cd "$XCODE_PROJECT_PATH"
-
-  CURRENT_BUILD=$(agvtool what-version -terse | head -1 | tr -d '[:space:]')
-
-  if ! [[ "$CURRENT_BUILD" =~ ^[0-9]+$ ]]; then
-    log_error "Could not parse build number from agvtool: '$CURRENT_BUILD'"
-    exit 1
-  fi
-
-  BUILD_NUMBER=$((CURRENT_BUILD + 1))
-
-  agvtool new-version "$BUILD_NUMBER"
-
-  CURRENT_MARKETING=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$XCODE_PROJECT_PATH/$INFO_PLIST" | tr -d '[:space:]')
-
-  IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_MARKETING"
-
-  MAJOR=${MAJOR:-0}
-  MINOR=${MINOR:-0}
-  PATCH=${PATCH:-0}
-
-  case "$BUMP_TYPE" in
-    patch)
-      PATCH=$((PATCH + 1))
-      ;;
-    minor)
-      MINOR=$((MINOR + 1))
-      PATCH=0
-      ;;
-    major)
-      MAJOR=$((MAJOR + 1))
-      MINOR=0
-      PATCH=0
-      ;;
-    *)
-      log_error "Invalid bump type: $BUMP_TYPE"
-      exit 1
-      ;;
-  esac
-
-  VERSION="$MAJOR.$MINOR.$PATCH"
-
-  agvtool new-marketing-version "$VERSION" 2>> "$LOG_FILE"
+if $DRY_RUN; then
+  log_warn "[DRY RUN] Would bump Info.plist and project.pbxproj to $VERSION (build $BUILD_NUMBER)"
+else
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST_PATH"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST_PATH"
 
   # agvtool fails to update MARKETING_VERSION in pbxproj when GENERATE_INFOPLIST_FILE=YES,
   # so patch it directly with sed.
-  sed -i '' "s/MARKETING_VERSION = 0\.[0-9]*\.[0-9]*/MARKETING_VERSION = $VERSION/g" \
-    "$XCODE_PROJECT_PATH/Snapback.xcodeproj/project.pbxproj"
-
-  # Keep source plist in sync too.
-  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$XCODE_PROJECT_PATH/$INFO_PLIST"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$XCODE_PROJECT_PATH/$INFO_PLIST"
-  log_info "Confirmed version after bump: $VERSION (build $BUILD_NUMBER)"
+  sed -i '' "s/MARKETING_VERSION = [0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/MARKETING_VERSION = $VERSION/g" "$PBXPROJ"
+  sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9][0-9]*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER/g" "$PBXPROJ"
 
   log_success "Version bumped to $VERSION (build $BUILD_NUMBER)"
-
-  cd "$PROJECT_DIR"
-
-elif [ -n "$OVERRIDE_VERSION" ]; then
-  VERSION="$OVERRIDE_VERSION"
-  BUILD_NUMBER=$(agvtool what-version -terse | head -1 | tr -d '[:space:]' 2>/dev/null || echo "unknown")
 fi
 
 # ============================================================================
@@ -379,19 +346,21 @@ fi
 # ============================================================================
 
 if [ -z "$RELEASE_NOTES_FILE" ]; then
-  log_info "Auto-generating release notes from git history..."
-  CHANGELOG_SCRIPT="$SCRIPT_DIR/generate-changelog.sh"
-  AUTO_NOTES_FILE="$BUILD_DIR/Snapback-$VERSION-notes.html"
+  log_info "Generating release notes with git-cliff..."
+  AUTO_NOTES_FILE="$BUILD_DIR/$RELEASE_NAME-notes.html"
 
-  if [ -f "$CHANGELOG_SCRIPT" ]; then
-    if $DRY_RUN; then
-      log_warn "[DRY RUN] Would generate release notes: $AUTO_NOTES_FILE"
-    elif bash "$CHANGELOG_SCRIPT" --version "$VERSION" --output "$AUTO_NOTES_FILE" 2>/dev/null; then
-      RELEASE_NOTES_FILE="$AUTO_NOTES_FILE"
-      log_success "Release notes generated: $AUTO_NOTES_FILE"
-    else
-      log_warn "Could not auto-generate release notes (continuing without)"
-    fi
+  if $DRY_RUN; then
+    log_warn "[DRY RUN] Would generate release notes: $AUTO_NOTES_FILE"
+  elif git-cliff \
+      --repository "$XCODE_PROJECT_PATH" \
+      --config "$SCRIPT_DIR/cliff.toml" \
+      --unreleased \
+      --tag "v$VERSION" \
+      --output "$AUTO_NOTES_FILE" 2>> "$LOG_FILE"; then
+    RELEASE_NOTES_FILE="$AUTO_NOTES_FILE"
+    log_success "Release notes generated: $AUTO_NOTES_FILE"
+  else
+    log_warn "Could not generate release notes (continuing without)"
   fi
 fi
 
@@ -441,6 +410,15 @@ if ! $SKIP_GIT; then
 
       log_success "Changes committed"
 
+    fi
+
+    # Commit version bump in app repo
+    if git -C "$XCODE_PROJECT_PATH" rev-parse --git-dir > /dev/null 2>&1; then
+      git -C "$XCODE_PROJECT_PATH" add "$PLIST_PATH" "$PBXPROJ" 2>/dev/null || true
+      if ! git -C "$XCODE_PROJECT_PATH" diff --quiet --cached; then
+        git -C "$XCODE_PROJECT_PATH" commit -m "chore: bump version to $VERSION (build $BUILD_NUMBER)"
+        log_success "Version bump committed in app repo"
+      fi
     fi
 
     # Tag the app repo so future changelogs have an accurate commit range

@@ -1,0 +1,42 @@
+# cliff.toml — git-cliff configuration for macOS release tools
+# Generates HTML release notes compatible with Sparkle's update dialog.
+# Docs: https://git-cliff.org/docs/configuration
+
+[changelog]
+header = ""
+body = """
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body>
+<h3>What's new in {{ version }}</h3>
+{% set features = commits | filter(attribute="group", value="New Features") -%}
+{% set fixes = commits | filter(attribute="group", value="Bug Fixes") -%}
+{% if features | length > 0 %}<h4>New Features</h4>
+<ul>
+{% for commit in features %}  <li>{{ commit.message | trim }}</li>
+{% endfor %}</ul>
+{% endif -%}
+{% if fixes | length > 0 %}<h4>Bug Fixes</h4>
+<ul>
+{% for commit in fixes %}  <li>{{ commit.message | trim }}</li>
+{% endfor %}</ul>
+{% endif -%}
+{% if features | length == 0 and fixes | length == 0 %}<p>Minor improvements and stability fixes.</p>
+{% endif %}
+</body>
+</html>
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+commit_parsers = [
+  { message = "^feat", group = "New Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = ".*", skip = true },
+]
+filter_commits = true
+tag_pattern = "v?[0-9]*"
