@@ -16,8 +16,16 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( dirname "$SCRIPT_DIR" )"
 RELEASES_DIR="$PROJECT_DIR/releases"
 
+CONFIG_FILE="$PROJECT_DIR/config.sh"
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "❌ config.sh not found at: $CONFIG_FILE"
+  echo "   Copy scripts/config.example.sh to config.sh and fill in your values."
+  exit 1
+fi
+source "$CONFIG_FILE"
+
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 Snapback-X.Y.Z.[zip|dmg] [options]"
+  echo "Usage: $0 ${APP_NAME}-X.Y.Z.[zip|dmg] [options]"
   echo ""
   echo "Options:"
   echo "  --release-notes PATH    HTML or TXT file with release notes"
@@ -58,8 +66,8 @@ fi
 FILENAME=$(basename "$RELEASE_FILE")
 
 # Validate filename format
-if ! [[ "$FILENAME" =~ ^Snapback-[0-9]+\.[0-9]+\.[0-9]+\.(zip|dmg)$ ]]; then
-  echo "❌ Invalid filename format. Expected: Snapback-X.Y.Z.zip or Snapback-X.Y.Z.dmg"
+if ! [[ "$FILENAME" =~ ^${APP_NAME}-[0-9]+\.[0-9]+\.[0-9]+\.(zip|dmg)$ ]]; then
+  echo "❌ Invalid filename format. Expected: ${APP_NAME}-X.Y.Z.zip or ${APP_NAME}-X.Y.Z.dmg"
   echo "   Got: $FILENAME"
   exit 1
 fi
@@ -80,9 +88,9 @@ if [ -n "$RELEASE_NOTES" ] && [ -f "$RELEASE_NOTES" ]; then
   VERSION="${VERSION%.dmg}"
   RELEASE_NOTES_EXT="${RELEASE_NOTES##*.}"
   
-  RELEASE_NOTES_DEST="$RELEASES_DIR/Snapback-$VERSION.$RELEASE_NOTES_EXT"
+  RELEASE_NOTES_DEST="$RELEASES_DIR/${APP_NAME}-$VERSION.$RELEASE_NOTES_EXT"
   cp "$RELEASE_NOTES" "$RELEASE_NOTES_DEST"
-  echo "✅ Copied release notes to releases/Snapback-$VERSION.$RELEASE_NOTES_EXT"
+  echo "✅ Copied release notes to releases/${APP_NAME}-$VERSION.$RELEASE_NOTES_EXT"
 fi
 
 # Generate appcast
@@ -99,4 +107,4 @@ VERSION="${VERSION%.zip}"
 VERSION="${VERSION%.dmg}"
 echo "🎉 Release complete!"
 echo "   Version: $VERSION"
-echo "   URL: https://snapbackapp.com/releases/$FILENAME"
+echo "   URL: $DOWNLOAD_URL_PREFIX/$FILENAME"

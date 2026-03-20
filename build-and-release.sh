@@ -31,8 +31,17 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( dirname "$SCRIPT_DIR" )"
 
-# Source configuration
-source "$SCRIPT_DIR/config.sh"
+# Source project-specific configuration (lives in the release repo, not in this script dir)
+CONFIG_FILE="$PROJECT_DIR/config.sh"
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "❌ config.sh not found at: $CONFIG_FILE"
+  echo ""
+  echo "   Copy the template to get started:"
+  echo "   cp scripts/config.example.sh config.sh"
+  echo "   Then fill in your project-specific values."
+  exit 1
+fi
+source "$CONFIG_FILE"
 
 # ============================================================================
 # DEFAULTS AND ARGUMENT PARSING
