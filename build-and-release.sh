@@ -341,7 +341,7 @@ else
   dmgbuild \
     -s "$SCRIPT_DIR/dmg-settings.py" \
     -D "app=$EXPORT_PATH/Snapback.app" \
-    -D "background=$SCRIPT_DIR/assets/dmg-background.png" \
+    -D "background=$PROJECT_DIR/assets/dmg-background.png" \
     "Snapback" \
     "$RELEASE_DMG" \
     >> "$LOG_FILE" 2>&1

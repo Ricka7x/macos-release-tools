@@ -31,7 +31,7 @@ icon_locations = {
 }
 
 # Window appearance
-background = _d.get("background", "scripts/assets/dmg-background.png")
+background = _d.get("background", "assets/dmg-background.png")
 
 window_rect       = ((200, 200), (660, 480))   # ((x, y), (w, h))
 default_view      = "icon-view"
