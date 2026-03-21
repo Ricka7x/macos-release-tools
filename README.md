@@ -70,6 +70,26 @@ For more control, run scripts individually:
 ./generate-appcast.sh
 ```
 
+## Using as a Git Submodule
+
+This repo is designed to be added as a submodule at `scripts/` in your release repo:
+
+```bash
+git submodule add https://github.com/Ricka7x/macos-release-tools.git scripts
+```
+
+### Updating to the latest version
+
+When changes are made to this repo, update the submodule in your release repo:
+
+```bash
+git submodule update --remote scripts
+git add scripts
+git commit -m "chore: update release scripts"
+```
+
+---
+
 ## Configuration
 
 Copy `config.example.sh` to `config.sh` and customize:
