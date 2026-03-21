@@ -72,7 +72,7 @@ rm -f "$RELEASES_DIR/appcast.xml"
 
 # Build command
 CMD="$SPARKLE_BIN/generate_appcast"
-CMD="$CMD --download-url-prefix $DOWNLOAD_URL_PREFIX"
+CMD="$CMD --download-url-prefix ${DOWNLOAD_URL_PREFIX%/}/"
 CMD="$CMD --link $LINK"
 CMD="$CMD --account ed25519"
 
