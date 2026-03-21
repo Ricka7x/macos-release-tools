@@ -195,7 +195,11 @@ Make sure there are conventional commits (`feat:` or `fix:`) since the last tag.
 Check `build.log` in the root of the release repo for the full Xcode output.
 
 **Sparkle not found**
-Run `brew install sparkle` or set `export SPARKLE_TOOLS_PATH="/path/to/sparkle/bin"` before running the script.
+Set `SPARKLE_BIN` in your `.env.local` or shell profile:
+
+```bash
+export SPARKLE_BIN="$HOME/Library/Developer/Xcode/DerivedData/[YourApp]/SourcePackages/artifacts/sparkle/Sparkle/bin"
+```
 
 **Notarization fails**
 Verify your keychain profile: `xcrun notarytool history --keychain-profile "YourProfile"`

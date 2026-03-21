@@ -4,9 +4,6 @@
 # Local config with real paths/secrets (use config.example.sh as template)
 config.sh
 
-# Sparkle local path overrides
-sparkle.env
-
 # Sensitive env overrides
 .env
 .env.local

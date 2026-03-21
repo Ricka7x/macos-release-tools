@@ -1,6 +1,6 @@
 # Release Scripts
 
-Production-ready automated build and release pipeline for Snapback.
+Production-ready automated build and release pipeline for macOS apps.
 
 ## Scripts Overview
 
@@ -9,8 +9,7 @@ Production-ready automated build and release pipeline for Snapback.
 | **build-and-release.sh** | Complete end-to-end pipeline | `./build-and-release.sh [options]` |
 | **release.sh** | Add release to repository | `./release.sh Snapback-X.Y.Z.zip [options]` |
 | **generate-appcast.sh** | Generate Sparkle feed | `./generate-appcast.sh [options]` |
-| **config.sh** | Configuration file | Sourced by other scripts |
-| **sparkle.env** | Sparkle path detection | Sourced automatically |
+| **config.example.sh** | Configuration template | Copy to `config.sh` and fill in values |
 
 ## Quick Start
 
@@ -73,7 +72,7 @@ For more control, run scripts individually:
 
 ## Configuration
 
-Edit `config.sh` to customize:
+Copy `config.example.sh` to `config.sh` and customize:
 
 - Project paths
 - Xcode scheme and configuration
@@ -81,7 +80,7 @@ Edit `config.sh` to customize:
 - Sparkle settings
 - Build directories
 
-See [DEPLOYMENT.md](../DEPLOYMENT.md) for details.
+
 
 ## Environment Setup
 
@@ -89,18 +88,27 @@ The scripts require:
 
 - ✅ macOS with Xcode
 - ✅ Xcode command line tools
-- ✅ Sparkle framework (auto-detected)
+- ✅ Sparkle framework (via Xcode package or Homebrew)
 - ✅ Git repository
+- ✅ `SPARKLE_BIN` set in your environment
 
 ### Install Dependencies
 
 ```bash
-# Sparkle framework (if not found)
-brew install sparkle
-
 # Xcode command line tools (if needed)
 xcode-select --install
 ```
+
+### Sparkle Setup
+
+`generate-appcast.sh` requires `SPARKLE_BIN` to point to Sparkle's binary directory. Set it in your `.env.local` or shell profile:
+
+```bash
+# .env.local (gitignored)
+export SPARKLE_BIN="$HOME/Library/Developer/Xcode/DerivedData/[YourApp]/SourcePackages/artifacts/sparkle/Sparkle/bin"
+```
+
+The DerivedData path is created automatically when you build your Xcode project with Sparkle as a Swift Package dependency.
 
 ## Error Handling
 
@@ -156,7 +164,7 @@ chmod +x *.sh
 ### Sparkle Not Found
 
 ```bash
-export SPARKLE_TOOLS_PATH="/path/to/sparkle/bin"
+export SPARKLE_BIN="$HOME/Library/Developer/Xcode/DerivedData/[YourApp]/SourcePackages/artifacts/sparkle/Sparkle/bin"
 ./build-and-release.sh
 ```
 
@@ -194,6 +202,4 @@ GitHub Actions automatically runs when you push releases:
 
 See `.github/workflows/generate-appcast.yml` for automation details.
 
-## Support
 
-See [DEPLOYMENT.md](../DEPLOYMENT.md) for complete documentation.

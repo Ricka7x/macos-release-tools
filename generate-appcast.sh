@@ -15,16 +15,12 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( dirname "$SCRIPT_DIR" )"
 RELEASES_DIR="$PROJECT_DIR/releases"
 
-# Source Sparkle path configuration
-source "$SCRIPT_DIR/sparkle.env"
-
 # Check if generate_appcast exists
 if [ ! -f "$SPARKLE_BIN/generate_appcast" ]; then
-  echo "❌ Error: Sparkle's generate_appcast not found at:"
-  echo "   $SPARKLE_BIN/generate_appcast"
+  echo "❌ Error: SPARKLE_BIN is not set or invalid."
   echo ""
-  echo "Please update SPARKLE_BIN in scripts/sparkle.env with the correct path."
-  echo "Usually found in: ~/Library/Developer/Xcode/DerivedData/[YourApp]/SourcePackages/artifacts/sparkle/Sparkle/bin"
+  echo "Set it in your .env.local or shell profile:"
+  echo "   export SPARKLE_BIN=\"\$HOME/Library/Developer/Xcode/DerivedData/[YourApp]/SourcePackages/artifacts/sparkle/Sparkle/bin\""
   exit 1
 fi
 
