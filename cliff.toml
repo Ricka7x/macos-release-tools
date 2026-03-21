@@ -30,6 +30,9 @@ body = """
 footer = ""
 trim = true
 
+[bump]
+custom_minor_increment_regex = "^feat"
+
 [git]
 conventional_commits = true
 filter_unconventional = true
