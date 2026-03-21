@@ -360,7 +360,12 @@ if [ -z "$RELEASE_NOTES_FILE" ]; then
   AUTO_NOTES_FILE="$BUILD_DIR/$RELEASE_NAME-notes.html"
 
   if $DRY_RUN; then
-    log_warn "[DRY RUN] Would generate release notes: $AUTO_NOTES_FILE"
+    log_info "[DRY RUN] Previewing release notes (git-cliff is read-only)..."
+    git-cliff \
+      --repository "$XCODE_PROJECT_PATH" \
+      --config "$SCRIPT_DIR/cliff.toml" \
+      --unreleased \
+      --tag "v$VERSION" 2>> "$LOG_FILE" || true
   elif git-cliff \
       --repository "$XCODE_PROJECT_PATH" \
       --config "$SCRIPT_DIR/cliff.toml" \
@@ -398,7 +403,7 @@ fi
 # GIT PHASE
 # ============================================================================
 
-if ! $SKIP_GIT; then
+if ! $SKIP_GIT && ! $DRY_RUN; then
 
   cd "$PROJECT_DIR"
 
