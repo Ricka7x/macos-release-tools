@@ -3,7 +3,7 @@
 # release.sh - Add a new app release
 #
 # Usage:
-#   ./scripts/release.sh Snapback-1.0.0.zip [options]
+#   ./scripts/release.sh ${APP_NAME}-1.0.0.zip [options]
 #
 # Options:
 #   --release-notes path/to/file.html   HTML or TXT file with release notes
@@ -14,7 +14,6 @@ set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( dirname "$SCRIPT_DIR" )"
-RELEASES_DIR="$PROJECT_DIR/releases"
 
 CONFIG_FILE="$PROJECT_DIR/config.sh"
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -23,6 +22,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
   exit 1
 fi
 source "$CONFIG_FILE"
+
+RELEASES_DIR="${RELEASES_DIR:-$PROJECT_DIR/releases}"
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 ${APP_NAME}-X.Y.Z.[zip|dmg] [options]"
@@ -83,7 +84,7 @@ echo "✅ Copied archive to releases/"
 
 # Copy release notes if provided
 if [ -n "$RELEASE_NOTES" ] && [ -f "$RELEASE_NOTES" ]; then
-  VERSION="${FILENAME#Snapback-}"
+  VERSION="${FILENAME#${APP_NAME}-}"
   VERSION="${VERSION%.zip}"
   VERSION="${VERSION%.dmg}"
   RELEASE_NOTES_EXT="${RELEASE_NOTES##*.}"
@@ -102,7 +103,7 @@ else
 fi
 
 echo ""
-VERSION="${FILENAME#Snapback-}"
+VERSION="${FILENAME#${APP_NAME}-}"
 VERSION="${VERSION%.zip}"
 VERSION="${VERSION%.dmg}"
 echo "🎉 Release complete!"

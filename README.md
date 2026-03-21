@@ -7,7 +7,7 @@ Production-ready automated build and release pipeline for macOS apps.
 | Script | Purpose | Usage |
 |--------|---------|-------|
 | **build-and-release.sh** | Complete end-to-end pipeline | `./build-and-release.sh [options]` |
-| **release.sh** | Add release to repository | `./release.sh Snapback-X.Y.Z.zip [options]` |
+| **release.sh** | Add release to repository | `./release.sh ${APP_NAME}-X.Y.Z.zip [options]` |
 | **generate-appcast.sh** | Generate Sparkle feed | `./generate-appcast.sh [options]` |
 | **config.example.sh** | Configuration template | Copy to `config.sh` and fill in values |
 
@@ -54,13 +54,13 @@ For more control, run scripts individually:
 ### 1. Add a Release
 
 ```bash
-./release.sh /path/to/Snapback-1.0.0.zip
+./release.sh /path/to/${APP_NAME}-1.0.0.zip
 ```
 
 ### 2. With Release Notes
 
 ```bash
-./release.sh /path/to/Snapback-1.0.0.zip \
+./release.sh /path/to/${APP_NAME}-1.0.0.zip \
   --release-notes ../release-notes/v1.0.0.html
 ```
 
@@ -139,9 +139,9 @@ tail -f build.log
    ```
 
 3. **Keep versions semantic** (semver)
-   - `Snapback-1.0.0.zip` ✅
-   - `Snapback-v1.0.0.zip` ❌
-   - `Snapback-1-0-0.zip` ❌
+   - `${APP_NAME}-1.0.0.zip` ✅
+   - `${APP_NAME}-v1.0.0.zip` ❌
+   - `${APP_NAME}-1-0-0.zip` ❌
 
 4. **Include meaningful release notes**
    - What's new
@@ -187,7 +187,7 @@ tail build.log
 # Then:
 cd ..
 git add releases/
-git commit -m "chore(release): Snapback v1.0.0"
+git commit -m "chore(release): ${APP_NAME} v1.0.0"
 git push
 ```
 

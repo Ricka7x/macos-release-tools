@@ -99,9 +99,9 @@ done
 # ============================================================================
 
 mkdir -p "$(dirname "$LOG_FILE")"
-echo "=== Snapback Build & Release Started: $(date) ===" > "$LOG_FILE"
+echo "=== $APP_NAME Build & Release Started: $(date) ===" > "$LOG_FILE"
 
-log_info "Starting Snapback build and release pipeline..."
+log_info "Starting $APP_NAME build and release pipeline..."
 log_info "Project directory: $PROJECT_DIR"
 log_info "Xcode project: $XCODE_PROJECT_PATH"
 
@@ -221,7 +221,7 @@ if $DRY_RUN; then
   log_warn "[DRY RUN] Would execute xcodebuild archive"
 else
   if ! xcodebuild \
-    -project "$XCODE_PROJECT_PATH/Snapback.xcodeproj" \
+    -project "$XCODE_PROJECT_PATH/$XCODE_SCHEME.xcodeproj" \
     -scheme "$XCODE_SCHEME" \
     -configuration "$XCODE_CONFIG" \
     MARKETING_VERSION="$VERSION" \
@@ -278,15 +278,15 @@ log_info "Notarizing app bundle..."
 
 if ! $DRY_RUN; then
 
-  APP_PATH="$EXPORT_PATH/Snapback.app"
+  APP_PATH="$EXPORT_PATH/$APP_NAME.app"
 
   # Xcode's GENERATE_INFOPLIST_FILE only processes Apple-defined keys.
   # Sparkle's SU* keys are silently dropped, so inject them before codesigning.
   APP_PLIST="$APP_PATH/Contents/Info.plist"
   /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string 1btXa+HGNXBso5RoX1qjX2lltfdpXbryUma3dw6+/O4=" "$APP_PLIST" 2>/dev/null || \
   /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey 1btXa+HGNXBso5RoX1qjX2lltfdpXbryUma3dw6+/O4=" "$APP_PLIST"
-  /usr/libexec/PlistBuddy -c "Add :SUFeedURL string https://snapbackapp.com/releases/appcast.xml" "$APP_PLIST" 2>/dev/null || \
-  /usr/libexec/PlistBuddy -c "Set :SUFeedURL https://snapbackapp.com/releases/appcast.xml" "$APP_PLIST"
+  /usr/libexec/PlistBuddy -c "Add :SUFeedURL string $DOWNLOAD_URL_PREFIX/appcast.xml" "$APP_PLIST" 2>/dev/null || \
+  /usr/libexec/PlistBuddy -c "Set :SUFeedURL $DOWNLOAD_URL_PREFIX/appcast.xml" "$APP_PLIST"
   /usr/libexec/PlistBuddy -c "Add :SUEnableAutomaticChecks bool true" "$APP_PLIST" 2>/dev/null || \
   /usr/libexec/PlistBuddy -c "Set :SUEnableAutomaticChecks true" "$APP_PLIST"
   log_info "Injected Sparkle keys into Info.plist"
@@ -301,7 +301,7 @@ if ! $DRY_RUN; then
     "$APP_PATH" \
     >> "$LOG_FILE" 2>&1
 
-  NOTARIZE_ZIP="$BUILD_DIR/Snapback-notarize.zip"
+  NOTARIZE_ZIP="$BUILD_DIR/$APP_NAME-notarize.zip"
 
   ditto -c -k --keepParent "$APP_PATH" "$NOTARIZE_ZIP"
 
@@ -331,7 +331,7 @@ fi
 
 log_info "Creating DMG release..."
 
-RELEASE_NAME="Snapback-$VERSION"
+RELEASE_NAME="$APP_NAME-$VERSION"
 RELEASE_DMG="$BUILD_DIR/$RELEASE_NAME.dmg"
 
 if $DRY_RUN; then
@@ -340,9 +340,9 @@ else
 
   dmgbuild \
     -s "$SCRIPT_DIR/dmg-settings.py" \
-    -D "app=$EXPORT_PATH/Snapback.app" \
+    -D "app=$EXPORT_PATH/$APP_NAME.app" \
     -D "background=$PROJECT_DIR/assets/dmg-background.png" \
-    "Snapback" \
+    "$APP_NAME" \
     "$RELEASE_DMG" \
     >> "$LOG_FILE" 2>&1
 
@@ -411,7 +411,7 @@ if ! $SKIP_GIT; then
 
     if ! git diff --quiet --cached; then
 
-      git commit -m "chore(release): Snapback v$VERSION
+      git commit -m "chore(release): $APP_NAME v$VERSION
 
  - Build: $BUILD_NUMBER
  - App archive: $RELEASE_NAME.dmg

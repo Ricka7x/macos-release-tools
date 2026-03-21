@@ -1,9 +1,9 @@
 #
-# dmgbuild settings for Snapback
+# dmgbuild settings for macOS app releases
 # https://dmgbuild.readthedocs.io/en/latest/settings.html
 #
-# Usage: dmgbuild -s scripts/dmg-settings.py "Snapback" output.dmg
-# Or with defines: dmgbuild -s scripts/dmg-settings.py -D app=/path/to/Snapback.app "Snapback" output.dmg
+# Usage: dmgbuild -s scripts/dmg-settings.py "AppName" output.dmg
+# Or with defines: dmgbuild -s scripts/dmg-settings.py -D app=/path/to/MyApp.app "AppName" output.dmg
 #
 
 import os
@@ -15,7 +15,7 @@ except NameError:
     _d = {}
 
 # App path can be overridden via -D app=...
-application = _d.get("app", "Snapback.app")
+application = _d.get("app", "App.app")
 app_name = os.path.basename(application)
 
 # Files to include in the DMG

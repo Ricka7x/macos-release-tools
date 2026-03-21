@@ -5,15 +5,22 @@
 # Usage:
 #   ./scripts/generate-appcast.sh [options]
 #
-# Release files should be named: Snapback-X.Y.Z.zip
-# Release notes should be named: Snapback-X.Y.Z.html or Snapback-X.Y.Z.txt
+# Release files should be named: ${APP_NAME}-X.Y.Z.zip
+# Release notes should be named: ${APP_NAME}-X.Y.Z.html or ${APP_NAME}-X.Y.Z.txt
 #
 
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( dirname "$SCRIPT_DIR" )"
-RELEASES_DIR="$PROJECT_DIR/releases"
+
+# Source project config if available (sets DOWNLOAD_URL_PREFIX, WEBSITE_URL, RELEASES_DIR, etc.)
+CONFIG_FILE="$PROJECT_DIR/config.sh"
+if [ -f "$CONFIG_FILE" ]; then
+  source "$CONFIG_FILE"
+fi
+
+RELEASES_DIR="${RELEASES_DIR:-$PROJECT_DIR/releases}"
 
 # Check if generate_appcast exists
 if [ ! -f "$SPARKLE_BIN/generate_appcast" ]; then
@@ -28,8 +35,8 @@ fi
 mkdir -p "$RELEASES_DIR"
 
 # Parse options
-DOWNLOAD_URL_PREFIX="https://snapbackapp.com/releases/"
-LINK="https://snapbackapp.com"
+DOWNLOAD_URL_PREFIX="${DOWNLOAD_URL_PREFIX:-}"
+LINK="${WEBSITE_URL:-}"
 ED_KEY_FILE=""
 
 while [[ $# -gt 0 ]]; do
@@ -46,7 +53,7 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: $0 [options]"
       echo ""
       echo "Options:"
-      echo "  --download-url-prefix URL   Download URL prefix (default: https://snapbackapp.com/releases)"
+      echo "  --download-url-prefix URL   Download URL prefix (reads from config.sh DOWNLOAD_URL_PREFIX if not set)"
       echo "  --ed-key-file PATH          Path to EdDSA private key file"
       echo "  --help                      Show this help"
       exit 0
