@@ -124,7 +124,7 @@ log_success "Configuration validated"
 
 log_info "Checking required tools..."
 
-for tool in xcodebuild dmgbuild xcrun ditto git-cliff; do
+for tool in xcodebuild create-dmg xcrun ditto git-cliff; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     log_error "Required tool not found: $tool"
     exit 1
@@ -338,13 +338,14 @@ if $DRY_RUN; then
   log_warn "[DRY RUN] Would create DMG"
 else
 
-  dmgbuild \
-    -s "$SCRIPT_DIR/dmg-settings.py" \
-    -D "app=$EXPORT_PATH/$APP_NAME.app" \
-    -D "background=$PROJECT_DIR/assets/dmg-background.png" \
-    "$APP_NAME" \
-    "$RELEASE_DMG" \
+  create-dmg \
+    --overwrite \
+    "$EXPORT_PATH/$APP_NAME.app" \
+    "$BUILD_DIR" \
     >> "$LOG_FILE" 2>&1
+
+  # create-dmg names the output "<AppName> <Version>.dmg"; rename to our convention
+  mv "$BUILD_DIR/$APP_NAME $VERSION.dmg" "$RELEASE_DMG"
 
   log_success "Release DMG created: $RELEASE_DMG"
 
