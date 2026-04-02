@@ -51,8 +51,11 @@ DOWNLOAD_URL_PREFIX="$WEBSITE_URL/releases"
 # SPARKLE SETTINGS
 # ============================================================================
 
-# Sparkle binary path must be set via environment variable
-# Set in your .env.local or shell profile:
+# Sparkle tools are auto-detected by scripts/generate-appcast.sh.
+# It checks SPARKLE_BIN/SPARKLE_TOOLS_PATH first, then common install paths,
+# then the newest DerivedData Sparkle artifact directory.
+#
+# Optional explicit override in your .env.local or shell profile:
 #   export SPARKLE_BIN="$HOME/Library/Developer/Xcode/DerivedData/[YourApp]/SourcePackages/artifacts/sparkle/Sparkle/bin"
 
 # Optional EdDSA private key file for signing releases

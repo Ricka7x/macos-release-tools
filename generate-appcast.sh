@@ -22,12 +22,64 @@ fi
 
 RELEASES_DIR="${RELEASES_DIR:-$PROJECT_DIR/releases}"
 
-# Check if generate_appcast exists
-if [ ! -f "$SPARKLE_BIN/generate_appcast" ]; then
-  echo "❌ Error: SPARKLE_BIN is not set or invalid."
+# Resolve Sparkle tools path. Prefer explicit env var, then fall back to common install locations.
+resolve_sparkle_bin() {
+  local candidate=""
+
+  # 1) Explicit path set by user
+  if [ -n "${SPARKLE_BIN:-}" ] && [ -x "$SPARKLE_BIN/generate_appcast" ] && [ -x "$SPARKLE_BIN/sign_update" ]; then
+    echo "$SPARKLE_BIN"
+    return 0
+  fi
+
+  # 2) Optional override alias kept for compatibility with older docs
+  if [ -n "${SPARKLE_TOOLS_PATH:-}" ] && [ -x "$SPARKLE_TOOLS_PATH/generate_appcast" ] && [ -x "$SPARKLE_TOOLS_PATH/sign_update" ]; then
+    echo "$SPARKLE_TOOLS_PATH"
+    return 0
+  fi
+
+  # 3) If generate_appcast is on PATH, derive bin dir from it
+  candidate="$(command -v generate_appcast 2>/dev/null || true)"
+  if [ -n "$candidate" ]; then
+    candidate="$(dirname "$candidate")"
+    if [ -x "$candidate/generate_appcast" ] && [ -x "$candidate/sign_update" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  fi
+
+  # 4) Homebrew common locations
+  for candidate in \
+    "/opt/homebrew/opt/sparkle/bin" \
+    "/usr/local/opt/sparkle/bin"; do
+    if [ -x "$candidate/generate_appcast" ] && [ -x "$candidate/sign_update" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  # 5) Xcode Swift Package artifacts in DerivedData (pick newest)
+  while IFS= read -r candidate; do
+    if [ -x "$candidate/generate_appcast" ] && [ -x "$candidate/sign_update" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done < <(ls -dt "$HOME"/Library/Developer/Xcode/DerivedData/*/SourcePackages/artifacts/sparkle/Sparkle/bin 2>/dev/null || true)
+
+  return 1
+}
+
+if RESOLVED_SPARKLE_BIN="$(resolve_sparkle_bin)"; then
+  SPARKLE_BIN="$RESOLVED_SPARKLE_BIN"
+  export SPARKLE_BIN
+else
+  echo "❌ Error: SPARKLE_BIN is not set or invalid, and auto-detection failed."
   echo ""
   echo "Set it in your .env.local or shell profile:"
   echo "   export SPARKLE_BIN=\"\$HOME/Library/Developer/Xcode/DerivedData/[YourApp]/SourcePackages/artifacts/sparkle/Sparkle/bin\""
+  echo ""
+  echo "Also supported:"
+  echo "   export SPARKLE_TOOLS_PATH=\"/path/to/sparkle/bin\""
   exit 1
 fi
 
