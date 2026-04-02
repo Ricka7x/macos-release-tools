@@ -36,10 +36,17 @@ custom_minor_increment_regex = "^feat"
 [git]
 conventional_commits = true
 filter_unconventional = true
+# Rewrite merge commits from feature/fix branches into conventional commit format
+# so they're picked up by the versioning and changelog logic.
+# e.g. "Merge pull request #8 from .../feat/groups-redesign" → "feat: groups-redesign"
+commit_preprocessors = [
+  { pattern = "^Merge pull request #\\d+ from [^/]+/feat[/-](\\S+).*", replace = "feat: $1" },
+  { pattern = "^Merge pull request #\\d+ from [^/]+/fix[/-](\\S+).*", replace = "fix: $1" },
+]
 commit_parsers = [
   { message = "^feat", group = "New Features" },
   { message = "^fix", group = "Bug Fixes" },
-  { message = ".*", skip = true },
+  { message = ".*", group = "Maintenance" },
 ]
 filter_commits = true
 tag_pattern = "v?[0-9]*"

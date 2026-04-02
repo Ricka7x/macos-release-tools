@@ -409,10 +409,7 @@ if ! $SKIP_GIT && ! $DRY_RUN; then
 
   if git rev-parse --git-dir > /dev/null 2>&1; then
 
-    git add releases/*.dmg 2>/dev/null || true
-    git add releases/*.delta 2>/dev/null || true
-    git add releases/*.html 2>/dev/null || true
-    git add releases/appcast.xml 2>/dev/null || true
+    git add releases/ 2>/dev/null || true
     git add -u releases/ 2>/dev/null || true
 
     if ! git diff --quiet --cached; then
