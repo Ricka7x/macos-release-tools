@@ -31,7 +31,7 @@ footer = ""
 trim = true
 
 [bump]
-custom_minor_increment_regex = "^feat"
+features_always_bump_minor = true
 
 [git]
 conventional_commits = true
