@@ -165,7 +165,7 @@ else
     VERSION=$(git-cliff \
                 --repository "$XCODE_PROJECT_PATH" \
                 --config "$SCRIPT_DIR/cliff.toml" \
-                --bumped-version 2>/dev/null | tr -d '[:space:]')
+                --bumped-version --unreleased 2>/dev/null | tr -d '[:space:]')
     VERSION="${VERSION#v}"  # strip leading 'v' if present
 
     if [ -z "$VERSION" ]; then
@@ -200,6 +200,12 @@ else
   # so patch it directly with sed.
   sed -i '' "s/MARKETING_VERSION = [0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/MARKETING_VERSION = $VERSION/g" "$PBXPROJ"
   sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9][0-9]*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER/g" "$PBXPROJ"
+
+  # Update web constants with the new version
+  WEB_CONSTANTS_FILE="$PROJECT_DIR/web/src/lib/constants.ts"
+  if [ -f "$WEB_CONSTANTS_FILE" ]; then
+    sed -i '' "s/export const LATEST_VERSION = \"[^\"]*\"/export const LATEST_VERSION = \"$VERSION\"/" "$WEB_CONSTANTS_FILE"
+  fi
 
   log_success "Version bumped to $VERSION (build $BUILD_NUMBER)"
 fi
