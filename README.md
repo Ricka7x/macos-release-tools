@@ -7,6 +7,7 @@ Production-ready automated build and release pipeline for macOS apps.
 | Script | Purpose | Usage |
 |--------|---------|-------|
 | **build-and-release.sh** | Complete end-to-end pipeline | `./build-and-release.sh [options]` |
+| **build-dmg.sh** | Local test build (DMG only, no release) | `./scripts/build-dmg.sh [options]` |
 | **release.sh** | Add release to repository | `./release.sh ${APP_NAME}-X.Y.Z.zip [options]` |
 | **generate-appcast.sh** | Generate Sparkle feed | `./generate-appcast.sh [options]` |
 | **config.example.sh** | Configuration template | Copy to `config.sh` and fill in values |
@@ -46,6 +47,42 @@ This handles everything:
 # Show help
 ./build-and-release.sh --help
 ```
+
+## Local Test Build (DMG only)
+
+Use `build-dmg.sh` to build and package a DMG for local testing without touching git, releases, or appcast.xml. Skips notarization by default so you can right-click to open and bypass Gatekeeper.
+
+```bash
+# Build with current plist version
+./scripts/build-dmg.sh
+
+# Override version
+./scripts/build-dmg.sh --version 1.2.0
+
+# Auto-detect next version via git-cliff and bump plist
+./scripts/build-dmg.sh --bump-version
+
+# Notarize the app (Gatekeeper-clean, slower)
+./scripts/build-dmg.sh --notarize
+
+# Build and open DMG in Finder when done
+./scripts/build-dmg.sh --open
+
+# Preview what would run without making changes
+./scripts/build-dmg.sh --dry-run
+
+# Combine flags
+./scripts/build-dmg.sh --bump-version --notarize --open
+```
+
+The DMG is written to the build directory. When you are ready to publish, run `build-and-release.sh` with the same version.
+
+### Requirements
+
+- `create-dmg` (e.g. `brew install create-dmg`)
+- `git-cliff` only if using `--bump-version`
+
+---
 
 ## Manual Workflow
 
