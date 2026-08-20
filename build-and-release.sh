@@ -133,6 +133,27 @@ done
 
 log_success "All required tools available"
 
+# create-dmg (npm) ships a native addon (macos-alias) built against a specific
+# Node ABI. A `brew upgrade node` or version-manager switch can silently break
+# it; detect that and self-heal instead of failing mid-release.
+log_info "Verifying create-dmg native module compatibility..."
+CREATE_DMG_CHECK=$(create-dmg --help 2>&1) || true
+if echo "$CREATE_DMG_CHECK" | grep -q "NODE_MODULE_VERSION"; then
+  log_warn "create-dmg's native module doesn't match the active Node ($(node -v 2>/dev/null)). Rebuilding..."
+  if ! npm rebuild -g create-dmg >> "$LOG_FILE" 2>&1; then
+    log_error "Failed to rebuild create-dmg. Run manually: npm rebuild -g create-dmg"
+    exit 1
+  fi
+  CREATE_DMG_CHECK=$(create-dmg --help 2>&1) || true
+  if echo "$CREATE_DMG_CHECK" | grep -q "NODE_MODULE_VERSION"; then
+    log_error "create-dmg still broken after rebuild. Run manually: npm rebuild -g create-dmg"
+    exit 1
+  fi
+  log_success "create-dmg rebuilt and verified against active Node"
+else
+  log_success "create-dmg native module OK"
+fi
+
 # ============================================================================
 # VERSION DETECTION
 # ============================================================================
