@@ -103,6 +103,23 @@ else
 fi
 
 echo ""
+
+# Optional: sync releases/ to a shared Cloudflare R2 bucket instead of (or in
+# addition to) committing them to this git repo. Opt in per-app by setting
+# R2_BUCKET in config.sh; apps that don't set it keep the git-hosted flow
+# unchanged.
+if [ -n "${R2_BUCKET:-}" ]; then
+  R2_REMOTE="${R2_REMOTE:-r2}"
+  R2_PREFIX="${R2_PREFIX:-$APP_NAME}"
+  if ! command -v rclone >/dev/null 2>&1; then
+    echo "❌ R2_BUCKET is set but rclone is not installed. Run: brew install rclone"
+    exit 1
+  fi
+  echo "☁️  Syncing releases/ to r2://$R2_BUCKET/$R2_PREFIX ..."
+  rclone sync "$RELEASES_DIR" "$R2_REMOTE:$R2_BUCKET/$R2_PREFIX" --progress
+  echo "✅ Synced to R2"
+fi
+
 VERSION="${FILENAME#${APP_NAME}-}"
 VERSION="${VERSION%.zip}"
 VERSION="${VERSION%.dmg}"

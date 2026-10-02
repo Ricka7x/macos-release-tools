@@ -48,6 +48,27 @@ WEBSITE_URL="https://yourapp.com"
 DOWNLOAD_URL_PREFIX="$WEBSITE_URL/releases"
 
 # ============================================================================
+# SHARED R2 RELEASE HOSTING (optional)
+# ============================================================================
+
+# If set, release.sh syncs releases/ to this Cloudflare R2 bucket via rclone
+# after generating the appcast, instead of (or in addition to) committing
+# DMGs/appcast.xml to this git repo. Leave unset to keep the git-hosted flow.
+#
+# Requires: brew install rclone, and an rclone remote (default name "r2")
+# configured in ~/.config/rclone/rclone.conf pointing at your R2 S3 API
+# credentials (Access Key ID, Secret Access Key, S3 endpoint from the
+# Cloudflare dashboard's R2 API token page). Never commit those credentials,
+# keep them in rclone.conf or Keychain only.
+#
+# If DOWNLOAD_URL_PREFIX above points at this same R2 bucket's custom domain
+# (e.g. "https://dl.66labs.dev/$APP_NAME"), release URLs stay correct without
+# further changes.
+R2_BUCKET="${R2_BUCKET:-}"
+R2_REMOTE="${R2_REMOTE:-r2}"
+R2_PREFIX="${R2_PREFIX:-$APP_NAME}"
+
+# ============================================================================
 # SPARKLE SETTINGS
 # ============================================================================
 
