@@ -18,7 +18,7 @@
 # PROJECT SETTINGS
 # ============================================================================
 
-# App name — used for DMG/zip naming and release notes filenames
+# App name: used for DMG/zip naming and release notes filenames
 # e.g. "MyApp" produces MyApp-1.0.0.dmg, MyApp-1.0.0.html
 APP_NAME="MyApp"
 
@@ -103,7 +103,7 @@ REQUIRED_FILES=(
 )
 
 # ============================================================================
-# HELPER FUNCTIONS — do not edit below this line
+# HELPER FUNCTIONS: do not edit below this line
 # ============================================================================
 
 log_info()    { echo "ℹ️  $1"; echo "[INFO] $1"    >> "$LOG_FILE"; }

@@ -120,7 +120,7 @@ echo "=== $APP_NAME Test Build Started: $(date) ===" > "$LOG_FILE"
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║              $APP_NAME — TEST BUILD (no release)            ║"
+echo "║              $APP_NAME - TEST BUILD (no release)            ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -132,7 +132,7 @@ if ! $DO_NOTARIZE; then
   log_info "Notarization OFF (use --notarize to enable). Right-click → Open to bypass Gatekeeper."
 fi
 if ! $DO_VERSION_BUMP; then
-  log_info "Version bump OFF — using current plist version (use --bump-version to auto-detect)"
+  log_info "Version bump OFF: using current plist version (use --bump-version to auto-detect)"
 fi
 
 # ============================================================================
@@ -194,7 +194,7 @@ elif $DO_VERSION_BUMP; then
     CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" | tr -d '[:space:]')
     IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "$CURRENT_VERSION"
     VERSION="$V_MAJOR.$((V_MINOR + 1)).0"
-    log_info "No tags found — using $CURRENT_VERSION → $VERSION as first release"
+    log_info "No tags found, using $CURRENT_VERSION -> $VERSION as first release"
   else
     VERSION=$(git-cliff \
                 --repository "$XCODE_PROJECT_PATH" \
@@ -397,7 +397,7 @@ else
 fi
 
 # ============================================================================
-# DONE — no release, no git, no appcast
+# DONE: no release, no git, no appcast
 # ============================================================================
 
 echo ""
