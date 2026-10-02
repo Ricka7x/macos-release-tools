@@ -1,4 +1,4 @@
-# cliff.toml — git-cliff configuration for macOS release tools
+# cliff.toml: git-cliff configuration for macOS release tools
 # Generates HTML release notes compatible with Sparkle's update dialog.
 # Docs: https://git-cliff.org/docs/configuration
 

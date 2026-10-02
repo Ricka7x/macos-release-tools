@@ -1,6 +1,6 @@
 # Usage Guide
 
-Automated release pipeline for macOS apps. Handles versioning, building, notarization, release notes, and Sparkle appcast generation — all from a single command.
+Automated release pipeline for macOS apps. Handles versioning, building, notarization, release notes, and Sparkle appcast generation, all from a single command.
 
 ## Prerequisites
 
@@ -97,7 +97,7 @@ Rules:
 - `chore:`, `docs:`, `refactor:`, etc. → skipped in release notes, no version bump impact
 - `BREAKING CHANGE:` in footer → triggers a **major** bump (0.3.x → 1.0.0)
 
-No need to touch version numbers in Xcode — the release script handles that.
+No need to touch version numbers in Xcode: the release script handles that.
 
 ### Releasing
 

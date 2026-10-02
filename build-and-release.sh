@@ -177,11 +177,11 @@ else
   LAST_TAG=$(git -C "$XCODE_PROJECT_PATH" tag --sort=-version:refname 2>/dev/null | head -1)
 
   if [ -z "$LAST_TAG" ]; then
-    # No tags yet — read current version from Info.plist and do an initial minor bump
+    # No tags yet: read current version from Info.plist and do an initial minor bump
     CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" | tr -d '[:space:]')
     IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "$CURRENT_VERSION"
     VERSION="$V_MAJOR.$((V_MINOR + 1)).0"
-    log_info "No tags found — using $CURRENT_VERSION → $VERSION as first release"
+    log_info "No tags found, using $CURRENT_VERSION -> $VERSION as first release"
   else
     VERSION=$(git-cliff \
                 --repository "$XCODE_PROJECT_PATH" \
