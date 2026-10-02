@@ -270,7 +270,7 @@ fi
 log_info "Exporting app bundle..."
 
 if ! $DRY_RUN; then
-  cat > "$EXPORT_OPTIONS_PLIST" << 'PLIST'
+  cat > "$EXPORT_OPTIONS_PLIST" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -280,7 +280,7 @@ if ! $DRY_RUN; then
     <key>signingStyle</key>
     <string>manual</string>
     <key>signingCertificate</key>
-    <string>Developer ID Application: Ricardo Ramirez (6WA4QS23C4)</string>
+    <string>$CODE_SIGN_IDENTITY</string>
     <key>stripSwiftSymbols</key>
     <true/>
 </dict>
