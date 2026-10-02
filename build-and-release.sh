@@ -407,6 +407,34 @@ if [ -z "$RELEASE_NOTES_FILE" ]; then
 fi
 
 # ============================================================================
+# CHANGELOG.md PHASE
+# ============================================================================
+#
+# Regenerates CHANGELOG.md in the app repo from the full tag history (not
+# appended incrementally). Full regeneration is git-cliff's recommended
+# pattern: it stays correct even if tags or commits are amended later, and
+# running it twice is a no-op. Separate from the per-release HTML notes
+# above (cliff.toml), which feed Sparkle's appcast; this is a human-readable
+# changelog meant to live in the app repo's git history, e.g. for GitHub's
+# release notes page or anyone browsing the repo.
+
+CHANGELOG_PATH="$XCODE_PROJECT_PATH/CHANGELOG.md"
+
+log_info "Updating CHANGELOG.md..."
+
+if $DRY_RUN; then
+  log_warn "[DRY RUN] Would regenerate $CHANGELOG_PATH"
+elif git-cliff \
+    --repository "$XCODE_PROJECT_PATH" \
+    --config "$SCRIPT_DIR/cliff-changelog.toml" \
+    --tag "v$VERSION" \
+    --output "$CHANGELOG_PATH" >> "$LOG_FILE" 2>&1; then
+  log_success "CHANGELOG.md updated: $CHANGELOG_PATH"
+else
+  log_warn "Could not update CHANGELOG.md (continuing without)"
+fi
+
+# ============================================================================
 # RELEASE PHASE
 # ============================================================================
 
@@ -453,7 +481,7 @@ if ! $SKIP_GIT && ! $DRY_RUN; then
 
     # Commit version bump in app repo
     if git -C "$XCODE_PROJECT_PATH" rev-parse --git-dir > /dev/null 2>&1; then
-      git -C "$XCODE_PROJECT_PATH" add "$PLIST_PATH" "$PBXPROJ" 2>/dev/null || true
+      git -C "$XCODE_PROJECT_PATH" add "$PLIST_PATH" "$PBXPROJ" "$CHANGELOG_PATH" 2>/dev/null || true
       if ! git -C "$XCODE_PROJECT_PATH" diff --quiet --cached; then
         git -C "$XCODE_PROJECT_PATH" commit -m "chore: bump version to $VERSION (build $BUILD_NUMBER)"
         log_success "Version bump committed in app repo"
