@@ -177,9 +177,16 @@ else
   LAST_TAG=$(git -C "$XCODE_PROJECT_PATH" tag --sort=-version:refname 2>/dev/null | head -1)
 
   if [ -z "$LAST_TAG" ]; then
-    # No tags yet: read current version from Info.plist and do an initial minor bump
-    CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" | tr -d '[:space:]')
+    # No tags yet: read current version from Info.plist and do an initial minor bump.
+    # A brand-new app's custom Info.plist (the GENERATE_INFOPLIST_FILE=YES merge source)
+    # may not carry CFBundleShortVersionString at all yet, PlistBuddy's Print then fails
+    # with a non-zero exit and empty output. Treat that as 0.0.0 so the very first
+    # release of a new app comes out as 0.1.0, not a hard failure.
+    CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" 2>/dev/null | tr -d '[:space:]')
+    CURRENT_VERSION="${CURRENT_VERSION:-0.0.0}"
     IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "$CURRENT_VERSION"
+    V_MAJOR="${V_MAJOR:-0}"
+    V_MINOR="${V_MINOR:-0}"
     VERSION="$V_MAJOR.$((V_MINOR + 1)).0"
     log_info "No tags found, using $CURRENT_VERSION -> $VERSION as first release"
   else
