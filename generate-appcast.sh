@@ -126,7 +126,7 @@ rm -f "$RELEASES_DIR/appcast.xml"
 CMD="$SPARKLE_BIN/generate_appcast"
 CMD="$CMD --download-url-prefix ${DOWNLOAD_URL_PREFIX%/}/"
 CMD="$CMD --link $LINK"
-CMD="$CMD --account ed25519"
+CMD="$CMD --account ${SPARKLE_ACCOUNT:-ed25519}"
 
 if [ -n "$ED_KEY_FILE" ]; then
   CMD="$CMD --ed-key-file $ED_KEY_FILE"
@@ -143,7 +143,7 @@ $CMD
 echo "✍️  Signing enclosures..."
 for DMG in "$RELEASES_DIR"/*.dmg; do
   FILENAME=$(basename "$DMG")
-  SIG_OUTPUT=$("$SPARKLE_BIN/sign_update" --account ed25519 "$DMG" 2>&1)
+  SIG_OUTPUT=$("$SPARKLE_BIN/sign_update" --account "${SPARKLE_ACCOUNT:-ed25519}" "$DMG" 2>&1)
   EDSIG=$(echo "$SIG_OUTPUT" | grep -o 'sparkle:edSignature="[^"]*"')
   LENGTH=$(echo "$SIG_OUTPUT" | grep -o 'length="[^"]*"')
   if [ -n "$EDSIG" ]; then

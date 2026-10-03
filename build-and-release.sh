@@ -310,8 +310,12 @@ if ! $DRY_RUN; then
   # Xcode's GENERATE_INFOPLIST_FILE only processes Apple-defined keys.
   # Sparkle's SU* keys are silently dropped, so inject them before codesigning.
   APP_PLIST="$APP_PATH/Contents/Info.plist"
-  /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string 1btXa+HGNXBso5RoX1qjX2lltfdpXbryUma3dw6+/O4=" "$APP_PLIST" 2>/dev/null || \
-  /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey 1btXa+HGNXBso5RoX1qjX2lltfdpXbryUma3dw6+/O4=" "$APP_PLIST"
+  if [ -z "${SPARKLE_ED_PUBLIC_KEY:-}" ]; then
+    log_error "SPARKLE_ED_PUBLIC_KEY is not set in config.sh. Refusing to build with no (or a borrowed) Sparkle public key."
+    exit 1
+  fi
+  /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_ED_PUBLIC_KEY" "$APP_PLIST" 2>/dev/null || \
+  /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $SPARKLE_ED_PUBLIC_KEY" "$APP_PLIST"
   /usr/libexec/PlistBuddy -c "Add :SUFeedURL string $DOWNLOAD_URL_PREFIX/appcast.xml" "$APP_PLIST" 2>/dev/null || \
   /usr/libexec/PlistBuddy -c "Set :SUFeedURL $DOWNLOAD_URL_PREFIX/appcast.xml" "$APP_PLIST"
   /usr/libexec/PlistBuddy -c "Add :SUEnableAutomaticChecks bool true" "$APP_PLIST" 2>/dev/null || \
