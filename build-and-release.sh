@@ -182,7 +182,11 @@ else
     # may not carry CFBundleShortVersionString at all yet, PlistBuddy's Print then fails
     # with a non-zero exit and empty output. Treat that as 0.0.0 so the very first
     # release of a new app comes out as 0.1.0, not a hard failure.
-    CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" 2>/dev/null | tr -d '[:space:]')
+    # `set -o pipefail` means a failing PlistBuddy still fails this whole pipeline
+    # even with 2>/dev/null and the empty string swallowed into tr's output.
+    # Run it unpiped first so a missing key doesn't trip `set -e`.
+    CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" 2>/dev/null) || CURRENT_VERSION=""
+    CURRENT_VERSION=$(echo "$CURRENT_VERSION" | tr -d '[:space:]')
     CURRENT_VERSION="${CURRENT_VERSION:-0.0.0}"
     IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "$CURRENT_VERSION"
     V_MAJOR="${V_MAJOR:-0}"
