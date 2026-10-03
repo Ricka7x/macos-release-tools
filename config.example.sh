@@ -79,6 +79,19 @@ R2_PREFIX="${R2_PREFIX:-$APP_NAME}"
 # Optional explicit override in your .env.local or shell profile:
 #   export SPARKLE_BIN="$HOME/Library/Developer/Xcode/DerivedData/[YourApp]/SourcePackages/artifacts/sparkle/Sparkle/bin"
 
+# The app's public EdDSA key (from Sparkle's generate_keys tool), injected into
+# Info.plist's SUPublicEDKey during the build. REQUIRED, the build refuses to
+# run without it, never borrow another app's key here.
+SPARKLE_ED_PUBLIC_KEY="${SPARKLE_ED_PUBLIC_KEY:-}"
+
+# Keychain account name under which this app's Sparkle EdDSA private key is
+# stored (generate_keys / sign_update --account <name>). Each app should use
+# its own account name (e.g. the app's lowercase name) so multiple apps'
+# signing keys on the same Mac never collide. Defaults to "ed25519" (Sparkle's
+# own default account name) for backward compatibility with apps that never
+# set this explicitly.
+SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-ed25519}"
+
 # Optional EdDSA private key file for signing releases
 # Use environment variable to avoid committing private key path
 SPARKLE_ED_KEY_FILE="${SPARKLE_ED_KEY_FILE:-}"
