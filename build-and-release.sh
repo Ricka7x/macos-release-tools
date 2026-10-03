@@ -225,7 +225,13 @@ log_info "Writing version to app repo..."
 if $DRY_RUN; then
   log_warn "[DRY RUN] Would bump Info.plist and project.pbxproj to $VERSION (build $BUILD_NUMBER)"
 else
+  # Add-or-Set: a brand-new app's custom Info.plist (GENERATE_INFOPLIST_FILE=YES merge
+  # source) may not carry these keys yet, and PlistBuddy's Set fails outright if the key
+  # doesn't already exist (unlike Xcode, which creates it). Add first, falling back to Set
+  # when the key is already there, same pattern used for Sparkle's SU* keys below.
+  /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST_PATH" 2>/dev/null || \
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST_PATH"
+  /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD_NUMBER" "$PLIST_PATH" 2>/dev/null || \
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST_PATH"
 
   # agvtool fails to update MARKETING_VERSION in pbxproj when GENERATE_INFOPLIST_FILE=YES,
@@ -281,6 +287,25 @@ fi
 log_info "Exporting app bundle..."
 
 if ! $DRY_RUN; then
+  # Manual-signing distribution requires an explicit provisioning profile when the app
+  # has entitlements beyond plain sandboxing/network (e.g. iCloud). Xcode's automatic
+  # signing can't generate those for Developer ID. Set BUNDLE_IDENTIFIER and
+  # PROVISIONING_PROFILE_UUID in config.sh for apps that need one (Boomark does for its
+  # CloudKit container; Snapback doesn't and leaves both unset).
+  PROVISIONING_BLOCK=""
+  if [ -n "${PROVISIONING_PROFILE_UUID:-}" ]; then
+    if [ -z "${BUNDLE_IDENTIFIER:-}" ]; then
+      log_error "PROVISIONING_PROFILE_UUID is set but BUNDLE_IDENTIFIER is not. Both are required together."
+      exit 1
+    fi
+    PROVISIONING_BLOCK="    <key>provisioningProfiles</key>
+    <dict>
+        <key>$BUNDLE_IDENTIFIER</key>
+        <string>$PROVISIONING_PROFILE_UUID</string>
+    </dict>
+"
+  fi
+
   cat > "$EXPORT_OPTIONS_PLIST" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -294,7 +319,7 @@ if ! $DRY_RUN; then
     <string>$CODE_SIGN_IDENTITY</string>
     <key>stripSwiftSymbols</key>
     <true/>
-</dict>
+$PROVISIONING_BLOCK</dict>
 </plist>
 PLIST
 
@@ -338,10 +363,36 @@ if ! $DRY_RUN; then
     "$APP_PATH/Contents/Frameworks/Sparkle.framework" \
     >> "$LOG_FILE" 2>&1
 
-  codesign --force --sign "$CODE_SIGN_IDENTITY" \
-    --timestamp --options runtime \
-    "$APP_PATH" \
-    >> "$LOG_FILE" 2>&1
+  # Re-signing to pick up the Sparkle Info.plist edits above would otherwise silently
+  # strip every entitlement baked in by xcodebuild's export (codesign does not carry
+  # entitlements forward on a plain re-sign): apps with hard-enforced entitlements like
+  # iCloud/CloudKit then crash at launch with no error, since Gatekeeper/notarization
+  # don't catch a *missing* entitlement, only a malformed one. Extract and re-apply them
+  # explicitly instead of trusting --preserve-metadata, which xcodebuild's own export step
+  # uses internally but a bare `codesign --force` does not.
+  ENTITLEMENTS_PLIST="$BUILD_DIR/ReExportEntitlements.plist"
+  codesign -d --entitlements "$ENTITLEMENTS_PLIST" --xml "$APP_PATH" >> "$LOG_FILE" 2>&1
+  if [ -s "$ENTITLEMENTS_PLIST" ]; then
+    codesign --force --sign "$CODE_SIGN_IDENTITY" \
+      --timestamp --options runtime \
+      --entitlements "$ENTITLEMENTS_PLIST" \
+      "$APP_PATH" \
+      >> "$LOG_FILE" 2>&1
+  else
+    log_warn "No entitlements found on exported app; re-signing without --entitlements (this is only correct for an app with none)."
+    codesign --force --sign "$CODE_SIGN_IDENTITY" \
+      --timestamp --options runtime \
+      "$APP_PATH" \
+      >> "$LOG_FILE" 2>&1
+  fi
+
+  # Verify the re-sign didn't drop anything: fail loudly instead of shipping a build
+  # that will crash silently at launch for entitlement-gated features.
+  POST_RESIGN_ENTITLEMENTS=$(codesign -d --entitlements - "$APP_PATH" 2>/dev/null)
+  if [ -s "$ENTITLEMENTS_PLIST" ] && [ -z "$POST_RESIGN_ENTITLEMENTS" ]; then
+    log_error "Entitlements were present before the final codesign but are missing after it. Refusing to ship a build that would crash at launch."
+    exit 1
+  fi
 
   NOTARIZE_ZIP="$BUILD_DIR/$APP_NAME-notarize.zip"
 
