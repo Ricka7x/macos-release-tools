@@ -205,9 +205,7 @@ fi
 
 if [ -n "$OVERRIDE_VERSION" ]; then
   VERSION="$OVERRIDE_VERSION"
-  CURRENT_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH" 2>/dev/null || echo "0")
-  BUILD_NUMBER="$CURRENT_BUILD"
-  log_info "Using override version: $VERSION (build $BUILD_NUMBER)"
+  log_info "Using override version: $VERSION"
 else
   log_info "Determining next version from git history..."
 
@@ -242,13 +240,21 @@ else
       exit 1
     fi
   fi
+fi
 
-  CURRENT_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH" 2>/dev/null || echo "0")
-  if [[ "$CURRENT_BUILD" =~ ^[0-9]+$ ]]; then
-    BUILD_NUMBER=$((CURRENT_BUILD + 1))
-  else
-    BUILD_NUMBER="$CURRENT_BUILD"
-  fi
+# The build number always increments from whatever's currently on disk,
+# whether VERSION came from --version or from git-cliff above: Sparkle
+# compares CFBundleVersion, not CFBundleShortVersionString, to decide
+# whether an update is newer, and refuses to generate an appcast with two
+# archives sharing the same build number (seen first-hand: using --version
+# twice in a row with no intervening normal release left CFBundleVersion
+# unchanged on disk, and generate_appcast correctly rejected the resulting
+# duplicate "0" between the two DMGs).
+CURRENT_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH" 2>/dev/null || echo "0")
+if [[ "$CURRENT_BUILD" =~ ^[0-9]+$ ]]; then
+  BUILD_NUMBER=$((CURRENT_BUILD + 1))
+else
+  BUILD_NUMBER="$CURRENT_BUILD"
 fi
 
 log_success "Version: $VERSION (build $BUILD_NUMBER)"
