@@ -284,6 +284,25 @@ if ! $DRY_RUN; then
   # Read signing certificate from config; fall back to a generic developer-id style
   SIGNING_CERT="${CODE_SIGN_IDENTITY:-Developer ID Application}"
 
+  # Same as build-and-release.sh's export phase: manual-signing distribution requires
+  # an explicit provisioning profile when the app has entitlements beyond plain
+  # sandboxing/network (e.g. iCloud). Set BUNDLE_IDENTIFIER and PROVISIONING_PROFILE_UUID
+  # in config.sh for apps that need one (Boomark does for its CloudKit container;
+  # Snapback and Peggo don't and leave both unset).
+  PROVISIONING_BLOCK=""
+  if [ -n "${PROVISIONING_PROFILE_UUID:-}" ]; then
+    if [ -z "${BUNDLE_IDENTIFIER:-}" ]; then
+      log_error "PROVISIONING_PROFILE_UUID is set but BUNDLE_IDENTIFIER is not. Both are required together."
+      exit 1
+    fi
+    PROVISIONING_BLOCK="    <key>provisioningProfiles</key>
+    <dict>
+        <key>$BUNDLE_IDENTIFIER</key>
+        <string>$PROVISIONING_PROFILE_UUID</string>
+    </dict>
+"
+  fi
+
   cat > "$EXPORT_OPTIONS_PLIST" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -297,7 +316,7 @@ if ! $DRY_RUN; then
     <string>$SIGNING_CERT</string>
     <key>stripSwiftSymbols</key>
     <true/>
-</dict>
+$PROVISIONING_BLOCK</dict>
 </plist>
 PLIST
 
