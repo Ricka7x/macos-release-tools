@@ -69,6 +69,46 @@ R2_REMOTE="${R2_REMOTE:-r2}"
 R2_PREFIX="${R2_PREFIX:-$APP_NAME}"
 
 # ============================================================================
+# TEST GATE (optional)
+# ============================================================================
+
+# Shell command run before anything else touches a file (version bump,
+# archive, etc.). A non-zero exit aborts the whole release with the repo
+# completely untouched. Runs with its working directory set to
+# XCODE_PROJECT_PATH. Leave unset to skip the gate (not recommended once a
+# test suite exists).
+#
+# Examples:
+#   TEST_COMMAND="xcodebuild test -scheme MyApp -destination 'platform=macOS'"
+#   TEST_COMMAND="cd MyAppKit && swift test"
+TEST_COMMAND="${TEST_COMMAND:-}"
+
+# ============================================================================
+# EXTERNAL SITE SYNC (optional)
+# ============================================================================
+
+# Path to another repo whose own releases/ folder should also receive a copy
+# of this release's DMG, release notes, and appcast.xml, for an app with a
+# dedicated marketing site that has its own independent deploy workflow
+# reading from its own local releases/ folder. Every copy is checksum-
+# verified against its source before anything commits it, and this step
+# never touches that repo's code, only its releases/ data. Leave unset for
+# an app with no dedicated site.
+EXTERNAL_SITE_REPO="${EXTERNAL_SITE_REPO:-}"
+
+# ============================================================================
+# CATALOG DOWNLOAD LINK (optional)
+# ============================================================================
+
+# Path to a catalog data file (e.g. 66-studio's src/lib/apps.ts) and the
+# app's slug within it. If both are set, update-catalog-link.py updates that
+# app's `download:` field to this release's DMG URL, scoped so it can never
+# touch another app's entry. Both are required together; leave both unset if
+# the app has no catalog entry yet.
+CATALOG_FILE="${CATALOG_FILE:-}"
+CATALOG_APP_SLUG="${CATALOG_APP_SLUG:-}"
+
+# ============================================================================
 # SPARKLE SETTINGS
 # ============================================================================
 

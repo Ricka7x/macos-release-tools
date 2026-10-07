@@ -4,15 +4,20 @@
 #
 # This script handles the entire process from source code to production release:
 # 1. Validates environment and configuration
-# 2. Determines next version from git history via git-cliff (feat->minor, fix->patch)
-# 3. Bumps version in Info.plist and project.pbxproj
-# 4. Builds and archives the Xcode project
-# 5. Exports the app bundle
-# 6. Notarizes and staples the app
-# 7. Creates a release DMG archive
-# 8. Generates HTML release notes via git-cliff
-# 9. Generates the Sparkle appcast.xml
-# 10. Commits version bump to app repo, commits release to web repo, tags app repo
+# 2. Runs the test suite (if TEST_COMMAND is set), aborting before touching anything on failure
+# 3. Determines next version from git history via git-cliff (feat->minor, fix->patch)
+# 4. Bumps version in Info.plist and project.pbxproj
+# 5. Builds and archives the Xcode project
+# 6. Exports the app bundle, verifying its embedded version matches
+# 7. Notarizes and staples the app
+# 8. Creates a release DMG archive
+# 9. Generates HTML release notes via git-cliff
+# 10. Generates and verifies the Sparkle appcast.xml
+# 11. Syncs release files into EXTERNAL_SITE_REPO, if configured (e.g. a dedicated
+#     marketing site with its own independent deploy workflow)
+# 12. Updates the download link in CATALOG_FILE for CATALOG_APP_SLUG, if configured
+# 13. Commits version bump + release files, tags the app repo, and pushes everything
+#     (app repo, release repo, external site repo) now that every prior step passed
 #
 # Usage:
 #   ./scripts/build-and-release.sh [options]
@@ -24,6 +29,12 @@
 #   --version VERSION      Override version determined by git-cliff
 #   --verbose              Enable verbose output
 #   --help                 Show this help message
+#
+# Optional config.sh variables added by this pipeline revision:
+#   TEST_COMMAND        Shell command to run before anything else; non-zero aborts the release
+#   EXTERNAL_SITE_REPO  Path to another repo whose own releases/ folder should get a copy
+#   CATALOG_FILE        Path to 66-studio's apps.ts (or similar) to update a download link in
+#   CATALOG_APP_SLUG    The app's slug within CATALOG_FILE; required together with CATALOG_FILE
 #
 
 set -euo pipefail
@@ -133,6 +144,32 @@ done
 
 log_success "All required tools available"
 
+# ============================================================================
+# TEST PHASE
+# ============================================================================
+#
+# Runs before anything else touches a file, so a failing suite leaves the repo
+# completely untouched. Optional per-app: set TEST_COMMAND in config.sh to a
+# shell command that exits non-zero on failure (e.g. `xcodebuild test -scheme
+# Foo -destination 'platform=macOS'` for an Xcode test target, or `cd FooKit
+# && swift test` for an SPM package living alongside the app). Runs with its
+# working directory set to XCODE_PROJECT_PATH.
+
+if [ -n "${TEST_COMMAND:-}" ]; then
+  log_info "Running test suite..."
+  if $DRY_RUN; then
+    log_warn "[DRY RUN] Would run: $TEST_COMMAND"
+  else
+    if ! (cd "$XCODE_PROJECT_PATH" && eval "$TEST_COMMAND") >> "$LOG_FILE" 2>&1; then
+      log_error "Test suite failed, refusing to release. Check log: $LOG_FILE"
+      exit 1
+    fi
+    log_success "Test suite passed"
+  fi
+else
+  log_warn "TEST_COMMAND not set in config.sh, skipping the pre-release test gate"
+fi
+
 # create-dmg (npm) ships a native addon (macos-alias) built against a specific
 # Node ABI. A `brew upgrade node` or version-manager switch can silently break
 # it; detect that and self-heal instead of failing mid-release.
@@ -239,12 +276,6 @@ else
   sed -i '' "s/MARKETING_VERSION = [0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/MARKETING_VERSION = $VERSION/g" "$PBXPROJ"
   sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9][0-9]*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER/g" "$PBXPROJ"
 
-  # Update web constants with the new version
-  WEB_CONSTANTS_FILE="$PROJECT_DIR/web/src/lib/constants.ts"
-  if [ -f "$WEB_CONSTANTS_FILE" ]; then
-    sed -i '' "s/export const LATEST_VERSION = \"[^\"]*\"/export const LATEST_VERSION = \"$VERSION\"/" "$WEB_CONSTANTS_FILE"
-  fi
-
   log_success "Version bumped to $VERSION (build $BUILD_NUMBER)"
 fi
 
@@ -331,6 +362,16 @@ PLIST
     >> "$LOG_FILE" 2>&1
 
   log_success "App bundle exported successfully"
+
+  # Catches a stale archive or a version-bump that silently didn't take,
+  # before spending time on notarization for a build that would ship the
+  # wrong version.
+  EXPORTED_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$EXPORT_PATH/$APP_NAME.app/Contents/Info.plist" 2>/dev/null || echo "")
+  if [ "$EXPORTED_VERSION" != "$VERSION" ]; then
+    log_error "Exported app reports version '$EXPORTED_VERSION', expected '$VERSION'. Refusing to release a mismatched build."
+    exit 1
+  fi
+  log_success "Exported app version verified: $VERSION"
 fi
 
 # ============================================================================
@@ -518,6 +559,111 @@ if $DRY_RUN; then
   log_warn "[DRY RUN] Would execute release script"
 else
   bash "$RELEASE_SCRIPT" "${RELEASE_ARGS[@]}"
+
+  log_info "Verifying generated appcast..."
+  APPCAST_PATH="$RELEASES_DIR/appcast.xml"
+  if [ ! -f "$APPCAST_PATH" ]; then
+    log_error "appcast.xml not found at $APPCAST_PATH after release.sh ran."
+    exit 1
+  fi
+  if ! grep -q "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$APPCAST_PATH"; then
+    log_error "appcast.xml has no entry for version $VERSION. Refusing to publish a feed that doesn't match this release."
+    exit 1
+  fi
+  log_success "appcast.xml verified for version $VERSION"
+fi
+
+# ============================================================================
+# EXTERNAL SITE SYNC PHASE
+# ============================================================================
+#
+# Optional per-app: set EXTERNAL_SITE_REPO in config.sh to another repo whose
+# own releases/ folder should also receive this release's files. Snapback's
+# dedicated site repo has its own independent deploy workflow reading from
+# its own local releases/ folder; this step only ever feeds that existing,
+# untouched workflow data, never its code. Every copy is checksum-verified
+# against its source before anything commits it.
+
+if [ -n "${EXTERNAL_SITE_REPO:-}" ] && ! $SKIP_GIT && ! $DRY_RUN; then
+  log_info "Syncing release files to external site repo: $EXTERNAL_SITE_REPO"
+
+  if [ ! -d "$EXTERNAL_SITE_REPO" ]; then
+    log_error "EXTERNAL_SITE_REPO is set but does not exist: $EXTERNAL_SITE_REPO"
+    exit 1
+  fi
+
+  EXTERNAL_RELEASES_DIR="$EXTERNAL_SITE_REPO/releases"
+  mkdir -p "$EXTERNAL_RELEASES_DIR"
+
+  SYNC_FILES=()
+  for f in "$RELEASES_DIR/$RELEASE_NAME".*; do
+    [ -f "$f" ] && SYNC_FILES+=("$f")
+  done
+  [ -f "$RELEASES_DIR/appcast.xml" ] && SYNC_FILES+=("$RELEASES_DIR/appcast.xml")
+
+  for f in "${SYNC_FILES[@]}"; do
+    cp "$f" "$EXTERNAL_RELEASES_DIR/"
+  done
+
+  for f in "${SYNC_FILES[@]}"; do
+    SRC_SUM=$(shasum -a 256 "$f" | awk '{print $1}')
+    DEST_SUM=$(shasum -a 256 "$EXTERNAL_RELEASES_DIR/$(basename "$f")" | awk '{print $1}')
+    if [ "$SRC_SUM" != "$DEST_SUM" ]; then
+      log_error "Checksum mismatch after copying $(basename "$f") to $EXTERNAL_SITE_REPO. Refusing to commit a corrupted file."
+      exit 1
+    fi
+  done
+
+  if git -C "$EXTERNAL_SITE_REPO" rev-parse --git-dir > /dev/null 2>&1; then
+    git -C "$EXTERNAL_SITE_REPO" add releases/ 2>/dev/null || true
+    if ! git -C "$EXTERNAL_SITE_REPO" diff --quiet --cached; then
+      git -C "$EXTERNAL_SITE_REPO" commit -m "chore(release): $APP_NAME v$VERSION"
+      log_success "Committed release files in $EXTERNAL_SITE_REPO"
+    else
+      log_warn "Nothing new to commit in $EXTERNAL_SITE_REPO"
+    fi
+  fi
+fi
+
+# ============================================================================
+# CATALOG UPDATE PHASE
+# ============================================================================
+#
+# Optional per-app: set CATALOG_FILE (path to 66-studio's apps.ts) and
+# CATALOG_APP_SLUG in config.sh to update that app's download link. The
+# actual edit happens in update-catalog-link.py, which scopes itself to the
+# block between this app's `slug:` line and the next one so it can never
+# touch a different app's entry, and only ever changes that one line.
+
+if [ -n "${CATALOG_FILE:-}" ] && ! $SKIP_GIT && ! $DRY_RUN; then
+  log_info "Updating catalog download link for '${CATALOG_APP_SLUG:-}'..."
+
+  if [ -z "${CATALOG_APP_SLUG:-}" ]; then
+    log_error "CATALOG_FILE is set but CATALOG_APP_SLUG is not. Both are required together."
+    exit 1
+  fi
+  if [ ! -f "$CATALOG_FILE" ]; then
+    log_error "CATALOG_FILE not found: $CATALOG_FILE"
+    exit 1
+  fi
+
+  NEW_DOWNLOAD_URL="$DOWNLOAD_URL_PREFIX/$RELEASE_NAME.dmg"
+  CATALOG_REPO="$(cd "$(dirname "$CATALOG_FILE")" && git rev-parse --show-toplevel 2>/dev/null)"
+
+  if ! python3 "$SCRIPT_DIR/update-catalog-link.py" "$CATALOG_FILE" "$CATALOG_APP_SLUG" "$NEW_DOWNLOAD_URL" >> "$LOG_FILE" 2>&1; then
+    log_error "Failed to update catalog download link. Check log: $LOG_FILE"
+    exit 1
+  fi
+
+  if [ -n "$CATALOG_REPO" ] && git -C "$CATALOG_REPO" rev-parse --git-dir > /dev/null 2>&1; then
+    git -C "$CATALOG_REPO" add "$CATALOG_FILE"
+    if ! git -C "$CATALOG_REPO" diff --quiet --cached -- "$CATALOG_FILE"; then
+      git -C "$CATALOG_REPO" commit -m "chore: update $CATALOG_APP_SLUG download link to v$VERSION"
+      log_success "Catalog download link updated and committed"
+    else
+      log_warn "Catalog download link already up to date"
+    fi
+  fi
 fi
 
 # ============================================================================
@@ -563,6 +709,27 @@ if ! $SKIP_GIT && ! $DRY_RUN; then
         git -C "$XCODE_PROJECT_PATH" push origin "v$VERSION" >> "$LOG_FILE" 2>&1
         log_success "Tagged app repo: v$VERSION"
       fi
+    fi
+
+    # Push everything else only now that every guard above has already
+    # passed: build, tests, the exported-version check, notarization, the
+    # appcast check, and (if configured) the external site sync and catalog
+    # update. Any failure in those would already have exited this script
+    # non-zero before reaching here, so a push past this point only ever
+    # ships a release that's been verified end to end.
+    if git -C "$XCODE_PROJECT_PATH" rev-parse --git-dir > /dev/null 2>&1; then
+      git -C "$XCODE_PROJECT_PATH" push origin HEAD >> "$LOG_FILE" 2>&1
+      log_success "Pushed $APP_NAME app repo"
+    fi
+
+    if git -C "$PROJECT_DIR" rev-parse --git-dir > /dev/null 2>&1; then
+      git -C "$PROJECT_DIR" push origin HEAD >> "$LOG_FILE" 2>&1
+      log_success "Pushed release repo"
+    fi
+
+    if [ -n "${EXTERNAL_SITE_REPO:-}" ] && git -C "$EXTERNAL_SITE_REPO" rev-parse --git-dir > /dev/null 2>&1; then
+      git -C "$EXTERNAL_SITE_REPO" push origin HEAD >> "$LOG_FILE" 2>&1
+      log_success "Pushed external site repo"
     fi
 
   fi
