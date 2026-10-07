@@ -706,15 +706,20 @@ if ! $SKIP_GIT && ! $DRY_RUN; then
       fi
     fi
 
-    # Tag the app repo so future changelogs have an accurate commit range
+    # Tag the app repo so future changelogs have an accurate commit range. A tag that
+    # already exists locally (e.g. left behind by a run whose later push failed, such
+    # as a transient GitHub outage) must still be pushed here: it existing locally is
+    # not evidence it ever reached the remote, and skipping the push in that case
+    # silently left a release's tag missing from GitHub even though this script
+    # reported success (caught first-hand after a GitHub 500 on an earlier run).
     if git -C "$XCODE_PROJECT_PATH" rev-parse --git-dir > /dev/null 2>&1; then
       if git -C "$XCODE_PROJECT_PATH" rev-parse "v$VERSION" > /dev/null 2>&1; then
-        log_warn "Tag v$VERSION already exists in app repo, skipping"
+        log_warn "Tag v$VERSION already exists locally, pushing it in case an earlier run never got it to origin"
       else
         git -C "$XCODE_PROJECT_PATH" tag -a "v$VERSION" -m "Release $VERSION (build $BUILD_NUMBER)"
-        git -C "$XCODE_PROJECT_PATH" push origin "v$VERSION" >> "$LOG_FILE" 2>&1
-        log_success "Tagged app repo: v$VERSION"
       fi
+      git -C "$XCODE_PROJECT_PATH" push origin "v$VERSION" >> "$LOG_FILE" 2>&1
+      log_success "Tagged app repo: v$VERSION"
     fi
 
     # Push everything else only now that every guard above has already
