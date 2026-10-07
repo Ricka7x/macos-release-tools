@@ -450,6 +450,15 @@ if ! $DRY_RUN; then
     --keychain-profile "$NOTARY_PROFILE" \
     --wait >> "$LOG_FILE" 2>&1
   else
+    # NOTARY_PROFILE empty falls through to direct Apple ID auth, which needs all
+    # three of these. Checked explicitly, since the bare `set -u` failure on one of
+    # them (seen first-hand on Snapback's config, which had NOTARY_PROFILE default
+    # to empty) just says "unbound variable" with no hint of what's actually missing
+    # or how to fix it.
+    if [ -z "${APPLE_ID:-}" ] || [ -z "${TEAM_ID:-}" ] || [ -z "${APP_PASSWORD:-}" ]; then
+      log_error "No notarization credentials configured. Set NOTARY_PROFILE in config.sh (preferred, via xcrun notarytool store-credentials), or all of APPLE_ID, TEAM_ID, and APP_PASSWORD as environment variables."
+      exit 1
+    fi
     xcrun notarytool submit "$NOTARIZE_ZIP" \
       --apple-id "$APPLE_ID" \
       --team-id "$TEAM_ID" \

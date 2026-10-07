@@ -376,6 +376,12 @@ if $DO_NOTARIZE; then
         --keychain-profile "$NOTARY_PROFILE" \
         --wait >> "$LOG_FILE" 2>&1
     else
+      # See build-and-release.sh's matching check for why this is explicit rather
+      # than a bare `set -u` failure on one of the three.
+      if [ -z "${APPLE_ID:-}" ] || [ -z "${TEAM_ID:-}" ] || [ -z "${APP_PASSWORD:-}" ]; then
+        log_error "No notarization credentials configured. Set NOTARY_PROFILE in config.sh (preferred, via xcrun notarytool store-credentials), or all of APPLE_ID, TEAM_ID, and APP_PASSWORD as environment variables."
+        exit 1
+      fi
       xcrun notarytool submit "$NOTARIZE_ZIP" \
         --apple-id "$APPLE_ID" \
         --team-id "$TEAM_ID" \
