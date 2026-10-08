@@ -765,6 +765,37 @@ if ! $SKIP_GIT && ! $DRY_RUN; then
     if [ -n "${EXTERNAL_SITE_REPO:-}" ] && git -C "$EXTERNAL_SITE_REPO" rev-parse --git-dir > /dev/null 2>&1; then
       git -C "$EXTERNAL_SITE_REPO" push origin HEAD >> "$LOG_FILE" 2>&1
       log_success "Pushed external site repo"
+
+      # Optional: purge Cloudflare's cache for the files just pushed to the
+      # external site repo, same reasoning as the R2 purge in release.sh (a
+      # reused filename can otherwise keep serving stale cached bytes). This
+      # repo's own deploy workflow still needs to actually run and publish the
+      # new files before a purge does any good; this only clears what was
+      # cached from BEFORE this push, it doesn't wait for that deploy.
+      if [ -n "${CF_EXTERNAL_ZONE_ID:-}" ]; then
+        if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+          log_warn "CF_EXTERNAL_ZONE_ID is set but CLOUDFLARE_API_TOKEN is not exported, skipping external site cache purge"
+        elif ! command -v jq > /dev/null 2>&1; then
+          log_warn "CF_EXTERNAL_ZONE_ID is set but jq is not installed, skipping external site cache purge"
+        elif [ "${#SYNC_FILES[@]}" -eq 0 ]; then
+          log_warn "CF_EXTERNAL_ZONE_ID is set but no files were synced to the external site repo, skipping purge"
+        else
+          EXTERNAL_PURGE_URLS=()
+          for f in "${SYNC_FILES[@]}"; do
+            EXTERNAL_PURGE_URLS+=("$WEBSITE_URL/releases/$(basename "$f")")
+          done
+          EXTERNAL_PURGE_BODY=$(printf '%s\n' "${EXTERNAL_PURGE_URLS[@]}" | jq -R . | jq -s '{files: .}')
+          EXTERNAL_PURGE_RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_EXTERNAL_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$EXTERNAL_PURGE_BODY")
+          if echo "$EXTERNAL_PURGE_RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
+            log_success "Purged Cloudflare cache for external site repo files"
+          else
+            log_warn "External site cache purge failed: $(echo "$EXTERNAL_PURGE_RESPONSE" | jq -c '.errors')"
+          fi
+        fi
+      fi
     fi
 
   fi

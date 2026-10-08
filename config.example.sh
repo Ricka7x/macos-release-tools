@@ -111,6 +111,17 @@ TEST_COMMAND="${TEST_COMMAND:-}"
 # an app with no dedicated site.
 EXTERNAL_SITE_REPO="${EXTERNAL_SITE_REPO:-}"
 
+# Optional: purge Cloudflare's cache for the files just pushed to
+# EXTERNAL_SITE_REPO, same reasoning as CF_ZONE_ID above but for this site's
+# own Cloudflare zone (likely a different one than DOWNLOAD_URL_PREFIX's,
+# since this is a dedicated domain, not the shared R2 bucket). Also requires
+# CLOUDFLARE_API_TOKEN exported in the shell, scoped to Zone > Cache Purge >
+# Purge for that zone. Note this only clears what Cloudflare had cached
+# before this push; it does not wait for that site's own deploy workflow to
+# finish publishing the new files, so a request in that gap can still get
+# stale content until the workflow completes.
+CF_EXTERNAL_ZONE_ID="${CF_EXTERNAL_ZONE_ID:-}"
+
 # ============================================================================
 # CATALOG DOWNLOAD LINK (optional)
 # ============================================================================
