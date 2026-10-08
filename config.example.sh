@@ -68,6 +68,21 @@ R2_BUCKET="${R2_BUCKET:-}"
 R2_REMOTE="${R2_REMOTE:-r2}"
 R2_PREFIX="${R2_PREFIX:-$APP_NAME}"
 
+# Optional: immediately purge Cloudflare's cache for the files just synced to
+# R2, instead of waiting for Cloudflare's own TTL to expire. Without this, a
+# release that reuses an existing filename (the marketing version didn't bump,
+# only the build number did, so the DMG's name repeats a prior release's) can
+# have Cloudflare keep serving the OLD cached bytes at that path, which fails
+# Sparkle's signature check for anyone who updates before the cache naturally
+# refreshes.
+#
+# Set to the Cloudflare zone ID that DOWNLOAD_URL_PREFIX's domain belongs to
+# (dashboard > that domain > Overview > Zone ID in the right sidebar). Also
+# requires CLOUDFLARE_API_TOKEN exported in your shell (never put it in this
+# file), scoped to Zone > Cache Purge > Purge for that zone, and `brew install
+# jq`. Leave CF_ZONE_ID unset to skip this step entirely.
+CF_ZONE_ID="${CF_ZONE_ID:-}"
+
 # ============================================================================
 # TEST GATE (optional)
 # ============================================================================

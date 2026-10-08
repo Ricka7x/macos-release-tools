@@ -118,6 +118,52 @@ if [ -n "${R2_BUCKET:-}" ]; then
   echo "☁️  Syncing releases/ to r2://$R2_BUCKET/$R2_PREFIX ..."
   rclone sync "$RELEASES_DIR" "$R2_REMOTE:$R2_BUCKET/$R2_PREFIX" --progress
   echo "✅ Synced to R2"
+
+  # Optional: immediately purge Cloudflare's cache for the files just synced.
+  # Without this, a release that reuses an existing filename (e.g. only the build
+  # number bumped, not the marketing version, so the DMG's name repeats a prior
+  # release's) can keep serving the OLD cached bytes at that unchanged path until
+  # the cache's own TTL expires on its own, which fails Sparkle's signature check
+  # for anyone who updates in that window, since the appcast's signature was
+  # computed against the new file (seen first-hand on Peggo: build 4 reused
+  # Peggo-0.1.2.dmg's name, and Cloudflare kept serving build 3's bytes under it
+  # for over 25 minutes until manually purged). Opt in by setting CF_ZONE_ID in
+  # config.sh to the zone DOWNLOAD_URL_PREFIX's domain belongs to, and exporting
+  # CLOUDFLARE_API_TOKEN in your shell, scoped to Zone > Cache Purge > Purge for
+  # that zone. Neither is required: without CF_ZONE_ID this step is skipped
+  # entirely, same as R2_BUCKET itself.
+  if [ -n "${CF_ZONE_ID:-}" ]; then
+    if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+      echo "⚠️  CF_ZONE_ID is set but CLOUDFLARE_API_TOKEN is not exported, skipping cache purge"
+    elif ! command -v jq >/dev/null 2>&1; then
+      echo "⚠️  CF_ZONE_ID is set but jq is not installed, skipping cache purge. Run: brew install jq"
+    else
+      echo "🧹 Purging Cloudflare cache for synced files..."
+      PURGE_FAILED=false
+      PURGE_URLS=()
+      while IFS= read -r -d '' f; do
+        PURGE_URLS+=("$DOWNLOAD_URL_PREFIX/${f#"$RELEASES_DIR"/}")
+      done < <(find "$RELEASES_DIR" -type f -print0)
+      # Cloudflare's purge-by-URL endpoint caps at 30 URLs per request.
+      for ((i = 0; i < ${#PURGE_URLS[@]}; i += 30)); do
+        BATCH=("${PURGE_URLS[@]:i:30}")
+        PURGE_BODY=$(printf '%s\n' "${BATCH[@]}" | jq -R . | jq -s '{files: .}')
+        PURGE_RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+          -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+          -H "Content-Type: application/json" \
+          --data "$PURGE_BODY")
+        if ! echo "$PURGE_RESPONSE" | jq -e '.success == true' >/dev/null 2>&1; then
+          PURGE_FAILED=true
+          echo "⚠️  Cloudflare cache purge batch failed: $(echo "$PURGE_RESPONSE" | jq -c '.errors')"
+        fi
+      done
+      if [ "$PURGE_FAILED" = false ]; then
+        echo "✅ Cloudflare cache purged"
+      else
+        echo "⚠️  Release still succeeded, but some cached files may be stale until their TTL expires"
+      fi
+    fi
+  fi
 fi
 
 VERSION="${FILENAME#${APP_NAME}-}"
