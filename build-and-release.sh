@@ -721,13 +721,28 @@ if ! $SKIP_GIT && ! $DRY_RUN; then
     # not evidence it ever reached the remote, and skipping the push in that case
     # silently left a release's tag missing from GitHub even though this script
     # reported success (caught first-hand after a GitHub 500 on an earlier run).
+    #
+    # A tag can also already exist and point at a DIFFERENT, older commit: a release
+    # whose version-bump logic only incremented the build number (no feat/fix commits,
+    # so the marketing version, and therefore the tag name, repeats the prior
+    # release's). Just re-pushing it as-is would silently leave v$VERSION forever
+    # pointing at the older build, so a release claiming that tag never actually
+    # matches what was shipped (caught first-hand: v0.1.2 for Peggo still pointed at
+    # build 3 after a build-4 release reused the same marketing version). Move it.
     if git -C "$XCODE_PROJECT_PATH" rev-parse --git-dir > /dev/null 2>&1; then
+      CURRENT_COMMIT=$(git -C "$XCODE_PROJECT_PATH" rev-parse HEAD)
       if git -C "$XCODE_PROJECT_PATH" rev-parse "v$VERSION" > /dev/null 2>&1; then
-        log_warn "Tag v$VERSION already exists locally, pushing it in case an earlier run never got it to origin"
+        EXISTING_TAG_COMMIT=$(git -C "$XCODE_PROJECT_PATH" rev-parse "v$VERSION^{commit}")
+        if [ "$EXISTING_TAG_COMMIT" = "$CURRENT_COMMIT" ]; then
+          log_warn "Tag v$VERSION already exists locally and already points at this release, pushing it in case an earlier run never got it to origin"
+        else
+          log_warn "Tag v$VERSION already exists but points at a different, older commit (a prior release that didn't bump the marketing version), moving it to this release"
+          git -C "$XCODE_PROJECT_PATH" tag -f -a "v$VERSION" -m "Release $VERSION (build $BUILD_NUMBER)"
+        fi
       else
         git -C "$XCODE_PROJECT_PATH" tag -a "v$VERSION" -m "Release $VERSION (build $BUILD_NUMBER)"
       fi
-      git -C "$XCODE_PROJECT_PATH" push origin "v$VERSION" >> "$LOG_FILE" 2>&1
+      git -C "$XCODE_PROJECT_PATH" push --force origin "v$VERSION" >> "$LOG_FILE" 2>&1
       log_success "Tagged app repo: v$VERSION"
     fi
 
